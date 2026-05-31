@@ -1,0 +1,24 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars        # may hold the bucket name / domain — keep local
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+.terraform.lock.hcl   # optional: commit this in real teams; ignored here for simplicity
+
+# Local backend state for 00-state-backend (chicken-and-egg layer)
+bootstrap/00-state-backend/terraform.tfstate*
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
