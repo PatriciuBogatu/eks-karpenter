@@ -1,0 +1,36 @@
+# =============================================================================
+# APP-OF-APPS ROOT
+#
+# This single Application is the ONLY thing you apply by hand (Terraform
+# bootstrapped ArgoCD; you bootstrap the app tree). It points ArgoCD at the
+# gitops/apps/ directory and tells it to manage every Application it finds there.
+# From then on, adding an app = committing a new Application YAML to gitops/apps/
+# — ArgoCD picks it up and deploys it. That recursion is the "app of apps".
+#
+# Replace REPO_URL with your Git repo once you've pushed this folder (Phase 6
+# wires CI to it; for now you can point it at your own fork/repo).
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/PatriciuBogatu/eks-karpenter # e.g. https://github.com/<you>/eks-retail-platform.git
+    targetRevision: main
+    path: gitops/apps # ArgoCD watches this dir for child Applications
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true # delete resources removed from Git
+      selfHeal: true # revert manual drift back to Git state
+    syncOptions:
+      - CreateNamespace=true

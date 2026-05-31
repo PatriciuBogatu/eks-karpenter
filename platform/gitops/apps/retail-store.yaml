@@ -1,0 +1,44 @@
+# =============================================================================
+# RETAIL STORE — child Application (discovered by the root app-of-apps)
+#
+# Deploys the AWS retail-store umbrella Helm chart (v1.6.1) from the upstream
+# repo, overriding values with our in-cluster-datastore topology. Because the
+# umbrella chart uses file:// subchart dependencies, ArgoCD builds them from the
+# same checkout automatically.
+#
+# Switching to Phase 4 (AWS dataplane) later is just a values swap here:
+# valueFiles -> gitops/values/retail-store-v2.yaml. The Application object and
+# the GitOps flow stay identical — which is the whole point of GitOps.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: retail-store
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # 1) The upstream chart, pinned to a released tag.
+    - repoURL: https://github.com/aws-containers/retail-store-sample-app.git
+      targetRevision: v1.6.1
+      path: src/app/chart
+      helm:
+        # Pull our override values from OUR repo (source #2) via $ref.
+        valueFiles:
+          - $values/gitops/values/retail-store-v1.yaml
+    # 2) Our repo, referenced only to supply the values file above.
+    - repoURL: REPO_URL # same repo as root-app.yaml
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: retail-store
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true # the catalog CRD-ish large manifests apply cleaner SSA

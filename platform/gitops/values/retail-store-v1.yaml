@@ -1,0 +1,90 @@
+# =============================================================================
+# Phase 3 (v1) values for the retail-store umbrella chart.
+#
+# This is the "everything in-cluster" topology: each service runs its OWN
+# datastore as a StatefulSet backed by an EBS volume (gp3) via PersistentVolume
+# claims. No AWS managed services yet — that's Phase 4 (RDS/DynamoDB/etc.).
+#
+# The pattern per service is identical and worth internalizing:
+#   app.persistence.provider: <store>   # tell the app to use a real backend
+#   <store>.create: true                # deploy the embedded datastore subchart
+#   <store>.persistentVolume.enabled: true  # back it with an EBS PV (stateful!)
+#
+# Values are keyed by the umbrella chart's dependency ALIASES (cart, catalog,
+# checkout, orders, ui) — see src/app/chart/Chart.yaml.
+# =============================================================================
+
+# ---- Catalog -> MySQL (StatefulSet + EBS) -----------------------------------
+catalog:
+  app:
+    persistence:
+      provider: mysql
+  mysql:
+    create: true
+    persistentVolume:
+      enabled: true
+      size: 8Gi
+      storageClass: gp3
+
+# ---- Cart -> DynamoDB-local (StatefulSet + EBS) -----------------------------
+# In-cluster uses the dynamodb-local image as a stand-in for real DynamoDB.
+cart:
+  app:
+    persistence:
+      provider: dynamodb
+  dynamodb:
+    create: true
+
+# ---- Checkout -> Redis (StatefulSet + EBS) ----------------------------------
+checkout:
+  app:
+    persistence:
+      provider: redis
+  redis:
+    create: true
+
+# ---- Orders -> PostgreSQL + RabbitMQ (StatefulSets + EBS) --------------------
+orders:
+  app:
+    persistence:
+      provider: postgres
+    messaging:
+      provider: rabbitmq
+  postgresql:
+    create: true
+    persistentVolume:
+      enabled: true
+      size: 8Gi
+      storageClass: gp3
+  rabbitmq:
+    create: true
+    persistentVolume:
+      enabled: true
+      size: 8Gi
+      storageClass: gp3
+
+# ---- UI (stateless front-end) + ALB Ingress ---------------------------------
+# The UI is exposed through an internet-facing ALB created by the AWS Load
+# Balancer Controller. ExternalDNS sees the host rule and creates the Route53
+# record automatically, so the app comes up at retail.patriciu.click.
+#
+# target-type: ip  -> ALB routes straight to pod IPs (works with the VPC CNI),
+#                     the modern default vs instance-mode NodePort hops.
+# The ACM cert ARN + 443 listener give you real HTTPS in Phase 5; for now this
+# serves HTTP on :80 (uncomment the TLS annotations once you confirm the basics).
+ui:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    className: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
+      # Group multiple Ingresses onto ONE shared ALB (saves cost + matches prod).
+      alb.ingress.kubernetes.io/group.name: retail
+    hosts:
+      - host: retail.patriciu.click
+        paths:
+          - path: /
+            pathType: Prefix
